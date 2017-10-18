@@ -112,7 +112,7 @@ export default class App extends Component {
     read=(index)=>{
         BluetoothManager.read(index)
             .then(value=>{
-                this.setState({readData:data});
+                this.setState({readData:value});
             })
             .catch(err=>{
 
@@ -162,11 +162,13 @@ export default class App extends Component {
             BluetoothManager.nofityServiceUUID[index],BluetoothManager.nofityCharacteristicUUID[index],
             (error, characteristic) => {
                 if (error) {
-                    console.log('monitor fail',error);            
+                    console.log('monitor fail',error);          
+                    this.alert('开启失败'); 
                 }else{
                     this.bluetoothReceiveData.push(value); //数据量多的话会分多次接收
                     this.setState({receiveData:this.bluetoothReceiveData.join('')})
-                    console.log('monitor success',characteristic)
+                    console.log('monitor success',characteristic);
+                    this.alert('开启成功'); 
                 }
 
             }, transactionId)
@@ -208,7 +210,7 @@ export default class App extends Component {
                     <Text style={{color:'black'}}>{data.name?data.name:''}</Text>
                     <Text style={{color:"red",marginLeft:50}}>{data.isConnecting?'连接中...':''}</Text>
                 </View>
-                <Text style={{}}>{data.id}</Text>
+                <Text>{data.id}</Text>
                
             </TouchableOpacity>
         );
@@ -267,8 +269,7 @@ export default class App extends Component {
                             <Text style={styles.buttonText}>{buttonText}（{item}）</Text>
                         </TouchableOpacity>
                     )
-                })}               
-               
+                })}        
             </View>
         )
     }
