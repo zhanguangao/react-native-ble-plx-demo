@@ -1,5 +1,6 @@
 # react-native-ble-plx-demo
 react native BLE蓝牙通信组件react-native-ble-plx使用示例
+
 BLE蓝牙通信原理可参考我的博客[React Native BLE蓝牙通信](http://blog.csdn.net/withings/article/details/71378562)
 
 # demo截图（ios）
