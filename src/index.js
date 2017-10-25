@@ -26,7 +26,8 @@ export default class App extends Component {
             writeData:'',
             receiveData:'',
             readData:'',
-            data:[]
+            data:[],
+            isMonitoring:false
         }
         this.bluetoothReceiveData = [];  //蓝牙接收的数据缓存
         this.deviceMap = new Map();
@@ -162,13 +163,15 @@ export default class App extends Component {
             BluetoothManager.nofityServiceUUID[index],BluetoothManager.nofityCharacteristicUUID[index],
             (error, characteristic) => {
                 if (error) {
+                    this.setState({isMonitoring:false});
                     console.log('monitor fail',error);          
                     this.alert('开启失败'); 
                 }else{
-                    this.bluetoothReceiveData.push(value); //数据量多的话会分多次接收
+                    this.setState({isMonitoring:true});
+                    this.bluetoothReceiveData.push(characteristic.value); //数据量多的话会分多次接收
                     this.setState({receiveData:this.bluetoothReceiveData.join('')})
-                    console.log('monitor success',characteristic);
-                    this.alert('开启成功'); 
+                    console.log('monitor success',characteristic.value);
+                    // this.alert('开启成功'); 
                 }
 
             }, transactionId)
@@ -241,7 +244,7 @@ export default class App extends Component {
                     {this.renderWriteView('写数据(write)：','发送',BluetoothManager.writeWithResponseCharacteristicUUID,this.write,this.state.writeData)}
                     {this.renderWriteView('写数据(writeWithoutResponse)：','发送',BluetoothManager.writeWithoutResponseCharacteristicUUID,this.writeWithoutResponse,this.state.writeData)}
                     {this.renderReceiveView('读取的数据：','读取',BluetoothManager.readCharacteristicUUID,this.read,this.state.readData)}
-                    {this.renderReceiveView('监听接收的数据：','开启监听',BluetoothManager.nofityCharacteristicUUID,this.monitor,this.state.receiveData)}
+                    {this.renderReceiveView('监听接收的数据：'+`${this.state.isMonitoring?'监听已开启':'监听未开启'}`,'开启监听',BluetoothManager.nofityCharacteristicUUID,this.monitor,this.state.receiveData)}
                 </View>                   
                 :<View style={{marginBottom:20}}></View>
                 }        
@@ -316,7 +319,7 @@ export default class App extends Component {
                     data={this.state.data}
                     ListHeaderComponent={this.renderHeader}
                     ListFooterComponent={this.renderFooter}
-                    extraData={[this.state.isConnected,this.state.text,this.state.receiveData,this.state.readData,this.state.writeData]}
+                    extraData={[this.state.isConnected,this.state.text,this.state.receiveData,this.state.readData,this.state.writeData,this.state.isMonitoring]}
                     keyboardShouldPersistTaps='handled'
                 />            
             </View>
