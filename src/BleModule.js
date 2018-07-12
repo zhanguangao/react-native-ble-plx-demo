@@ -45,14 +45,6 @@ export default class BleModule{
         return servicesMap
     }
 
-    //检验UUID是否可用
-     checkUUID(uuid){
-        if(uuid == '' || uuid.length == 4 || uuid.length != 36){
-            return false;
-        }
-        return true;
-    }
-
     initUUID(){
         this.readServiceUUID = [];
         this.readCharacteristicUUID = [];   

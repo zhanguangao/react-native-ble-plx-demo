@@ -238,9 +238,9 @@ export default class App extends Component {
 
     renderFooter=()=>{
         return(
-            <View>
+            <View style={{marginBottom:30}}>
                 {this.state.isConnected?
-                <View style={{marginBottom:20}}>
+                <View>
                     {this.renderWriteView('写数据(write)：','发送',BluetoothManager.writeWithResponseCharacteristicUUID,this.write,this.state.writeData)}
                     {this.renderWriteView('写数据(writeWithoutResponse)：','发送',BluetoothManager.writeWithoutResponseCharacteristicUUID,this.writeWithoutResponse,this.state.writeData)}
                     {this.renderReceiveView('读取的数据：','读取',BluetoothManager.readCharacteristicUUID,this.read,this.state.readData)}
@@ -319,7 +319,7 @@ export default class App extends Component {
                     data={this.state.data}
                     ListHeaderComponent={this.renderHeader}
                     ListFooterComponent={this.renderFooter}
-                    extraData={[this.state.isConnected,this.state.text,this.state.receiveData,this.state.readData,this.state.writeData,this.state.isMonitoring]}
+                    extraData={[this.state.isConnected,this.state.text,this.state.receiveData,this.state.readData,this.state.writeData,this.state.isMonitoring,this.state.scaning]}
                     keyboardShouldPersistTaps='handled'
                 />            
             </View>
