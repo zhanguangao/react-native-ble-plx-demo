@@ -1,6 +1,5 @@
 import React, { Component } from 'react';
 import {
-  AppRegistry,
   StyleSheet,
   Text,
   View,
@@ -8,7 +7,6 @@ import {
   ScrollView,
   FlatList,
   TextInput,
-  Dimensions,
   Platform,
   Alert
 } from 'react-native';
