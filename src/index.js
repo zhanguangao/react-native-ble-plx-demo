@@ -56,15 +56,14 @@ export default class App extends Component {
         if(!this.state.scaning) {
             this.setState({scaning:true});
             this.deviceMap.clear();
-            BluetoothManager.manager.startDeviceScan(null, null, (error, device) => {
+            BluetoothManager.manager.startDeviceScan(null, null, (error, device) => {                
                 if (error) {
-                    if(error.code == 102){
+                    console.log('startDeviceScan error:',error)
+                    if(error.errorCode == 102){
                         this.alert('请打开手机蓝牙后再搜索');
                     }
-                    console.log(error);     
                     this.setState({scaning:false});   
                 }else{
-                    // console.log(device);
                     console.log(device.id,device.name);
                     this.deviceMap.set(device.id,device); //使用Map类型保存搜索到的蓝牙设备，确保列表不显示重复的设备
                     this.setState({data:[...this.deviceMap.values()]});      
@@ -118,12 +117,12 @@ export default class App extends Component {
             })       
     }
 
-    write=(index)=>{
+    write=(index,type)=>{
         if(this.state.text.length == 0){
             this.alert('请输入消息');
             return;
         }
-        BluetoothManager.write(this.state.text,index)
+        BluetoothManager.write(this.state.text,index,type)
             .then(characteristic=>{
                 this.bluetoothReceiveData = [];
                 this.setState({
@@ -136,12 +135,12 @@ export default class App extends Component {
             })       
     }
 
-    writeWithoutResponse=(index)=>{
+    writeWithoutResponse=(index,type)=>{
         if(this.state.text.length == 0){
             this.alert('请输入消息');
             return;
         }
-        BluetoothManager.writeWithoutResponse(this.state.text,index)
+        BluetoothManager.writeWithoutResponse(this.state.text,index,type)
             .then(characteristic=>{
                 this.bluetoothReceiveData = [];
                 this.setState({
@@ -162,8 +161,8 @@ export default class App extends Component {
             (error, characteristic) => {
                 if (error) {
                     this.setState({isMonitoring:false});
-                    console.log('monitor fail',error);          
-                    this.alert('开启失败'); 
+                    console.log('monitor fail:',error);    
+                    this.alert('monitor fail: ' + error.reason);      
                 }else{
                     this.setState({isMonitoring:true});
                     this.bluetoothReceiveData.push(characteristic.value); //数据量多的话会分多次接收
@@ -239,10 +238,14 @@ export default class App extends Component {
             <View style={{marginBottom:30}}>
                 {this.state.isConnected?
                 <View>
-                    {this.renderWriteView('写数据(write)：','发送',BluetoothManager.writeWithResponseCharacteristicUUID,this.write,this.state.writeData)}
-                    {this.renderWriteView('写数据(writeWithoutResponse)：','发送',BluetoothManager.writeWithoutResponseCharacteristicUUID,this.writeWithoutResponse,this.state.writeData)}
-                    {this.renderReceiveView('读取的数据：','读取',BluetoothManager.readCharacteristicUUID,this.read,this.state.readData)}
-                    {this.renderReceiveView('监听接收的数据：'+`${this.state.isMonitoring?'监听已开启':'监听未开启'}`,'开启监听',BluetoothManager.nofityCharacteristicUUID,this.monitor,this.state.receiveData)}
+                    {this.renderWriteView('写数据(write)：','发送',
+                            BluetoothManager.writeWithResponseCharacteristicUUID,this.write)}
+                    {this.renderWriteView('写数据(writeWithoutResponse)：','发送',
+                            BluetoothManager.writeWithoutResponseCharacteristicUUID,this.writeWithoutResponse,)}
+                    {this.renderReceiveView('读取的数据：','读取',
+                            BluetoothManager.readCharacteristicUUID,this.read,this.state.readData)}
+                    {this.renderReceiveView(`监听接收的数据：${this.state.isMonitoring?'监听已开启':'监听未开启'}`,'开启监听',
+                            BluetoothManager.nofityCharacteristicUUID,this.monitor,this.state.receiveData)}
                 </View>                   
                 :<View style={{marginBottom:20}}></View>
                 }        
@@ -250,34 +253,9 @@ export default class App extends Component {
         )
     }
 
-    renderReceiveView=(label,buttonText,characteristics,onPress,state)=>{
-        if(characteristics.length == 0){
-            return;
-        }
-        return(
-            <View style={{marginHorizontal:10,marginTop:30}}>
-                <Text style={{color:'black',marginTop:5}}>{label}</Text>               
-                <Text style={styles.content}>
-                    {state}
-                </Text>
-                {characteristics.map((item,index)=>{
-                    return(
-                        <TouchableOpacity 
-                            activeOpacity={0.7} 
-                            style={styles.buttonView} 
-                            onPress={()=>{onPress(index)}} 
-                            key={index}>
-                            <Text style={styles.buttonText}>{buttonText} ({item})</Text>
-                        </TouchableOpacity>
-                    )
-                })}        
-            </View>
-        )
-    }
-
     renderWriteView=(label,buttonText,characteristics,onPress,state)=>{
         if(characteristics.length == 0){
-            return;
+            return null;
         }
         return(
             <View style={{marginHorizontal:10,marginTop:30}} behavior='padding'>
@@ -307,6 +285,31 @@ export default class App extends Component {
             </View>
         )
     }
+
+    renderReceiveView=(label,buttonText,characteristics,onPress,state)=>{
+        if(characteristics.length == 0){
+            return null;
+        }
+        return(
+            <View style={{marginHorizontal:10,marginTop:30}}>
+                <Text style={{color:'black',marginTop:5}}>{label}</Text>               
+                <Text style={styles.content}>
+                    {state}
+                </Text>
+                {characteristics.map((item,index)=>{
+                    return(
+                        <TouchableOpacity 
+                            activeOpacity={0.7} 
+                            style={styles.buttonView} 
+                            onPress={()=>{onPress(index)}} 
+                            key={index}>
+                            <Text style={styles.buttonText}>{buttonText} ({item})</Text>
+                        </TouchableOpacity>
+                    )
+                })}        
+            </View>
+        )
+    }   
 
     render () {
         return (

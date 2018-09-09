@@ -2,7 +2,7 @@ import {
     Platform,
     Alert,
 } from 'react-native'
-import { BleManager, Base64 } from 'react-native-ble-plx';
+import { BleManager } from 'react-native-ble-plx';
 import { Buffer } from 'buffer';
 
 export default class BleModule{
@@ -99,29 +99,27 @@ export default class BleModule{
         console.log('writeWithoutResponseCharacteristicUUID',this.writeWithoutResponseCharacteristicUUID);
         console.log('nofityServiceUUID',this.nofityServiceUUID);
         console.log('nofityCharacteristicUUID',this.nofityCharacteristicUUID);    
-    }  
-    
-    // /**
-    //  * 搜索蓝牙
-    //  * */
-    // scan(){
-    //     return new Promise( (resolve, reject) =>{
-    //         this.manager.startDeviceScan(null, null, (error, device) => {
-    //             if (error) {
-    //                 if(error.code == 102){
-    //                     this.alert('请打开手机蓝牙后再搜索');
-    //                 }
-    //                 console.log(error);        
-    //                 reject(error);            
-    //             }else{
-    //                 // console.log(device);
-    //                 console.log(device.id,device.name);
-    //                 resolve(device);                        
-    //             }              
-    //         })
+    } 
 
-    //     });
-    // }
+    /**
+     * 搜索蓝牙
+     * */
+    scan(){
+        return new Promise( (resolve, reject) =>{
+            this.manager.startDeviceScan(null, null, (error, device) => {
+                if (error) {
+                    console.log('startDeviceScan error:',error)
+                    if(error.errorCode == 102){
+                        this.alert('请打开手机蓝牙后再搜索');
+                    }
+                    reject(error);            
+                }else{
+                    resolve(device);                        
+                }              
+            })
+
+        });
+    }
 
     
      /**
@@ -157,7 +155,7 @@ export default class BleModule{
                 })
                 .catch(err=>{
                     this.isConnecting = false;
-                    console.log('connect fail:',err);
+                    console.log('connect fail: ',err);
                     reject(err);                    
                 })
         });
@@ -187,13 +185,14 @@ export default class BleModule{
         return new Promise( (resolve, reject) =>{
             this.manager.readCharacteristicForDevice(this.peripheralId,this.readServiceUUID[index], this.readCharacteristicUUID[index])
                 .then(characteristic=>{                    
-                    let value = Buffer.from(characteristic.value,'base64');                    
-                    // let base64 = newValue.toString('base64')                                  
+                    let buffer = Buffer.from(characteristic.value,'base64');  
+                    let value = buffer.toString();                 
                     console.log('read success',value);
                     // console.log('read success',characteristic.value);
                     resolve(value);     
                 },error=>{
-                    console.log('read fail',error);
+                    console.log('read fail: ',error);
+                    this.alert('read fail: ' + error.reason);
                     reject(error);
                 })
         });
@@ -201,19 +200,21 @@ export default class BleModule{
 
     /**
      * 写数据 
+     * type base64,hex
      * */
     write(value,index){
         // let asciiValue = new Buffer(value, "base64").toString('ascii'); //转成ascii发送过去
-        let hexValue = new Buffer(value, "base64").toString('hex');  //转成16进制数据发送过去
+        // let hexValue = new Buffer(value, "base64").toString('hex');  //转成16进制数据发送过去       
         let transactionId = 'write';
         return new Promise( (resolve, reject) =>{      
-            this.manager.writeCharacteristicWithoutResponseForDevice(this.peripheralId,this.writeWithResponseServiceUUID[index], 
-                this.writeWithResponseCharacteristicUUID[index],hexValue,transactionId)
+            this.manager.writeCharacteristicWithResponseForDevice(this.peripheralId,this.writeWithResponseServiceUUID[index], 
+                this.writeWithResponseCharacteristicUUID[index],value,transactionId)
                 .then(characteristic=>{                    
-                    console.log('write success',hexValue);
+                    console.log('write success',value);
                     resolve(characteristic);
                 },error=>{
-                    console.log('write fail',error);
+                    console.log('write fail: ',error);
+                    this.alert('write fail: ',error.reason);
                     reject(error);
                 })
         });
@@ -224,16 +225,17 @@ export default class BleModule{
      * */
     writeWithoutResponse(value,index){
         // let asciiValue = new Buffer(value, "base64").toString('ascii'); //转成ascii发送过去
-        let hexValue = new Buffer(value, "base64").toString('hex'); //转成16进制数据发送过去
+        // let hexValue = new Buffer(value, "base64").toString('hex'); //转成16进制数据发送过去
         let transactionId = 'writeWithoutResponse';
         return new Promise( (resolve, reject) =>{   
             this.manager.writeCharacteristicWithoutResponseForDevice(this.peripheralId, this.writeWithoutResponseServiceUUID[index], 
-                this.writeWithoutResponseCharacteristicUUID[index],hexValue,transactionId)
+                this.writeWithoutResponseCharacteristicUUID[index],value,transactionId)
                 .then(characteristic=>{
-                    console.log('writeWithoutResponse success',hexValue);
+                    console.log('writeWithoutResponse success',value);
                     resolve(characteristic);
                 },error=>{
-                    console.log('writeWithoutResponse fail',error);
+                    console.log('writeWithoutResponse fail: ',error);
+                    this.alert('writeWithoutResponse fail: ',error.reason);
                     reject(error);
                 })
         });
