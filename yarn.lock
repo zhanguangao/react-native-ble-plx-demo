@@ -4082,9 +4082,9 @@ react-is@^16.4.1:
   version "16.5.0"
   resolved "https://registry.yarnpkg.com/react-is/-/react-is-16.5.0.tgz#2ec7c192709698591efe13722fab3ef56144ba55"
 
-react-native-ble-plx@^0.10.0:
-  version "0.10.0"
-  resolved "https://registry.yarnpkg.com/react-native-ble-plx/-/react-native-ble-plx-0.10.0.tgz#261b076e9bde540a2670a7fe0436a811a924040d"
+"react-native-ble-plx@https://github.com/zhanguangao/react-native-ble-plx.git":
+  version "1.0.3"
+  resolved "https://github.com/zhanguangao/react-native-ble-plx.git#c8c310e114da2c809889e0f17dd0154d7c173915"
 
 react-native@0.56.0:
   version "0.56.0"

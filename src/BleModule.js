@@ -200,15 +200,18 @@ export default class BleModule{
 
     /**
      * 写数据 
-     * type base64,hex
      * */
     write(value,index){
-        // let asciiValue = new Buffer(value, "base64").toString('ascii'); //转成ascii发送过去
-        // let hexValue = new Buffer(value, "base64").toString('hex');  //转成16进制数据发送过去       
+        let formatValue;      
+        if(value === '0D0A') {  //直接发送小票打印机的结束标志
+            formatValue = value;
+        }else {  //发送内容，转换成base64编码
+            formatValue = new Buffer(value, "base64").toString('ascii'); 
+        }
         let transactionId = 'write';
         return new Promise( (resolve, reject) =>{      
             this.manager.writeCharacteristicWithResponseForDevice(this.peripheralId,this.writeWithResponseServiceUUID[index], 
-                this.writeWithResponseCharacteristicUUID[index],value,transactionId)
+                this.writeWithResponseCharacteristicUUID[index],formatValue,transactionId)
                 .then(characteristic=>{                    
                     console.log('write success',value);
                     resolve(characteristic);
@@ -221,15 +224,19 @@ export default class BleModule{
     }
 
      /**
-     * 写数据 
+     * 写数据 withoutResponse
      * */
     writeWithoutResponse(value,index){
-        // let asciiValue = new Buffer(value, "base64").toString('ascii'); //转成ascii发送过去
-        // let hexValue = new Buffer(value, "base64").toString('hex'); //转成16进制数据发送过去
+        let formatValue;      
+        if(value === '0D0A') {  //直接发送小票打印机的结束标志
+            formatValue = value;
+        }else {  //发送内容，转换成base64编码
+            formatValue = new Buffer(value, "base64").toString('ascii'); 
+        }
         let transactionId = 'writeWithoutResponse';
         return new Promise( (resolve, reject) =>{   
             this.manager.writeCharacteristicWithoutResponseForDevice(this.peripheralId, this.writeWithoutResponseServiceUUID[index], 
-                this.writeWithoutResponseCharacteristicUUID[index],value,transactionId)
+                this.writeWithoutResponseCharacteristicUUID[index],formatValue,transactionId)
                 .then(characteristic=>{
                     console.log('writeWithoutResponse success',value);
                     resolve(characteristic);
