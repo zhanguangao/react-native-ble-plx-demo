@@ -31,7 +31,7 @@ export default class App extends Component {
         this.deviceMap = new Map();
     }
 
-    componentWillMount(){
+    componentDidMount(){
         // 监听蓝牙开关
         this.onStateChangeListener = BluetoothManager.manager.onStateChange((state) => {
             console.log("onStateChange: ", state);
