@@ -1,3 +1,5 @@
+import {Alert} from 'react-native';
+
 /** 字符串转换成byte数组 */
 export function stringToByte(str: string) {
   var bytes = new Array();
@@ -47,4 +49,8 @@ export function byteToString(arr: any) {
     }
   }
   return str;
+}
+
+export function alert(text: string) {
+  Alert.alert('提示', text, [{text: '确定', onPress: () => {}}]);
 }

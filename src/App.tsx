@@ -2,33 +2,48 @@ import React, {useEffect, useRef, useState} from 'react';
 import {
   Alert,
   FlatList,
+  ListRenderItemInfo,
+  Platform,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
-import {Subscription} from 'react-native-ble-plx';
+import {BleErrorCode, Device, State, Subscription} from 'react-native-ble-plx';
 import BleModule from './BleModule';
+import Characteristic from './components/Characteristic';
+import Header from './components/Header';
+import {alert} from './utils';
 
 // 注意: 需要确保全局只有一个BleManager实例，因为BleModule类保存着蓝牙的连接信息
-const BluetoothManager = new BleModule();
+const bleModule = new BleModule();
 
 const App: React.FC = () => {
+  // 蓝牙是否连接
   const [isConnected, setIsConnected] = useState(false);
+  // 正在扫描中
   const [scaning, setScaning] = useState(false);
+  // 蓝牙是否正在监听
   const [isMonitoring, setIsMonitoring] = useState(false);
-  const [text, setText] = useState('');
+  // 当前正在连接的蓝牙id
+  const [connectingId, setConnectingId] = useState('');
+  // 写数据
   const [writeData, setWriteData] = useState('');
+  // 接收到的数据
   const [receiveData, setReceiveData] = useState('');
+  // 读取的数据
   const [readData, setReadData] = useState('');
-  const [data, setData] = useState<any[]>([]);
+  // 输入的内容
+  const [inputText, setInputText] = useState('');
+  // 扫描的蓝牙列表
+  const [data, setData] = useState<Device[]>([]);
 
   /** 蓝牙接收的数据缓存 */
   const bleReceiveData = useRef<any[]>([]);
   /** 使用Map类型保存搜索到的蓝牙设备，确保列表不显示重复的设备 */
-  const deviceMap = useRef(new Map());
+  const deviceMap = useRef(new Map<string, Device>());
 
   const scanTimer = useRef<number>();
   const disconnectListener = useRef<Subscription>();
@@ -36,164 +51,149 @@ const App: React.FC = () => {
 
   useEffect(() => {
     // 监听蓝牙开关
-    const onStateChangeListener = BluetoothManager.manager.onStateChange(
-      state => {
-        console.log('onStateChange: ', state);
-        if (state == 'PoweredOn') {
-          scan();
-        }
-      },
-    );
+    const stateChangeListener = bleModule.manager.onStateChange(state => {
+      console.log('onStateChange: ', state);
+      if (state == State.PoweredOn) {
+        scan();
+      }
+    });
 
     return () => {
-      BluetoothManager.destroy();
-      onStateChangeListener?.remove();
+      stateChangeListener?.remove();
       disconnectListener.current?.remove();
       monitorListener.current?.remove();
     };
   }, []);
 
-  function alert(text: string) {
-    Alert.alert('提示', text, [{text: '确定', onPress: () => {}}]);
-  }
-
   function scan() {
-    if (!scaning) {
-      setScaning(true);
-      deviceMap.current.clear();
-      BluetoothManager.manager.startDeviceScan(null, null, (error, device) => {
-        if (error) {
-          console.log('startDeviceScan error:', error);
-          if (error.errorCode == 102) {
-            alert('请打开手机蓝牙后再搜索');
-          }
-          setScaning(false);
-        } else {
-          console.log(device!.id, device!.name);
-          deviceMap.current.set(device!.id, device);
-          setData([...deviceMap.current.values()]);
+    setScaning(true);
+    deviceMap.current.clear();
+    bleModule.manager.startDeviceScan(null, null, (error, device) => {
+      if (error) {
+        console.log('startDeviceScan error:', error);
+        if (error.errorCode === BleErrorCode.BluetoothPoweredOff) {
+          enableBluetooth();
         }
-      });
-      scanTimer.current && clearTimeout(scanTimer.current);
-      scanTimer.current = setTimeout(() => {
-        if (scaning) {
-          BluetoothManager.stopScan();
-          setScaning(false);
-        }
-      }, 1000); // 1秒后停止搜索
-    } else {
-      BluetoothManager.stopScan();
+        setScaning(false);
+      } else if (device) {
+        // console.log(device);
+        // console.log(device.id, device.name);
+        deviceMap.current.set(device.id, device);
+        setData([...deviceMap.current.values()]);
+      }
+    });
+
+    scanTimer.current && clearTimeout(scanTimer.current);
+    scanTimer.current = setTimeout(() => {
+      bleModule.stopScan();
       setScaning(false);
+    }, 3000); // 3秒后停止搜索
+  }
+
+  function enableBluetooth() {
+    if (Platform.OS === 'ios') {
+      alert('请开启手机蓝牙');
+    } else {
+      Alert.alert('提示', '请开启手机蓝牙', [
+        {
+          text: '取消',
+          onPress: () => {},
+        },
+        {
+          text: '打开',
+          onPress: () => {
+            bleModule.manager.enable();
+          },
+        },
+      ]);
     }
   }
 
-  function connect(item: any) {
+  function connect(item: Device) {
+    // 连接的时候正在扫描，先停止扫描
     if (scaning) {
-      //连接的时候正在扫描，先停止扫描
-      BluetoothManager.stopScan();
+      bleModule.stopScan();
       setScaning(false);
     }
-    if (BluetoothManager.isConnecting) {
-      console.log('当前蓝牙正在连接时不能打开另一个连接进程');
-      return;
-    }
-    let newData = [...deviceMap.current.values()];
     // 正在连接中
-    newData[item.index].isConnecting = true;
-    setData(newData);
-    BluetoothManager.connect(item.item.id)
-      .then(device => {
-        newData[item.index].isConnecting = false;
-        setData([newData[item.index]]);
+    setConnectingId(item.id);
+    bleModule
+      .connect(item.id)
+      .then(() => {
+        // 连接成功后，列表只显示已连接的设备
+        setData([item]);
         setIsConnected(true);
         onDisconnect();
       })
       .catch(err => {
-        newData[item.index].isConnecting = false;
-        setData([...newData]);
-        alert(err);
+        alert('连接失败');
+      })
+      .finally(() => {
+        setConnectingId('');
       });
   }
 
   function read(index: number) {
-    BluetoothManager.read(index)
+    bleModule
+      .read(index)
       .then((value: any) => {
         setReadData(value);
       })
       .catch(err => {});
   }
 
-  function write(index: number) {
-    if (text.length == 0) {
-      alert('请输入消息');
-      return;
-    }
-    BluetoothManager.write(text, index)
-      .then(characteristic => {
-        bleReceiveData.current = [];
-        setWriteData(text);
-        setText('');
-      })
-      .catch(err => {});
-  }
+  function write(writeType: 'write' | 'writeWithoutResponse') {
+    return (index: number) => {
+      if (inputText.length === 0) {
+        alert('请输入消息内容');
+        return;
+      }
 
-  function writeWithoutResponse(index: number) {
-    if (text.length == 0) {
-      alert('请输入消息');
-      return;
-    }
-    BluetoothManager.writeWithoutResponse(text, index)
-      .then(characteristic => {
-        bleReceiveData.current = [];
-        setWriteData(text);
-        setText('');
-      })
-      .catch(err => {});
+      bleModule[writeType](inputText, index)
+        .then(() => {
+          bleReceiveData.current = [];
+          setWriteData(inputText);
+          setInputText('');
+        })
+        .catch(err => {
+          alert('发送失败');
+        });
+    };
   }
 
   /** 监听蓝牙数据 */
   function monitor(index: number) {
-    let transactionId = 'monitor';
-    monitorListener.current =
-      BluetoothManager.manager.monitorCharacteristicForDevice(
-        BluetoothManager.peripheralId,
-        BluetoothManager.nofityServiceUUID[index],
-        BluetoothManager.nofityCharacteristicUUID[index],
-        (error, characteristic) => {
-          if (error) {
-            setIsMonitoring(false);
-            console.log('monitor fail:', error);
-            alert('monitor fail: ' + error.reason);
-          } else {
-            setIsMonitoring(false);
-            bleReceiveData.current.push(characteristic!.value); //数据量多的话会分多次接收
-            setReceiveData(bleReceiveData.current.join(''));
-            console.log('monitor success', characteristic!.value);
-            // alert('开启成功');
-          }
-        },
-        transactionId,
-      );
+    monitorListener.current = bleModule.manager.monitorCharacteristicForDevice(
+      bleModule.peripheralId,
+      bleModule.nofityServiceUUID[index],
+      bleModule.nofityCharacteristicUUID[index],
+      (error, characteristic) => {
+        if (error) {
+          setIsMonitoring(false);
+          console.log('monitor fail:', error);
+          alert('monitor fail: ' + error.reason);
+        } else {
+          setIsMonitoring(false);
+          bleReceiveData.current.push(characteristic!.value); //数据量多的话会分多次接收
+          setReceiveData(bleReceiveData.current.join(''));
+          console.log('monitor success', characteristic!.value);
+        }
+      },
+    );
   }
 
   /** 监听蓝牙断开 */
   function onDisconnect() {
-    disconnectListener.current = BluetoothManager.manager.onDeviceDisconnected(
-      BluetoothManager.peripheralId,
+    disconnectListener.current = bleModule.manager.onDeviceDisconnected(
+      bleModule.peripheralId,
       (error, device) => {
         if (error) {
-          //蓝牙遇到错误自动断开
-          console.log('onDeviceDisconnected', 'device disconnect', error);
-          setData([...deviceMap.current.values()]);
-          setIsConnected(false);
+          // 蓝牙遇到错误自动断开
+          console.log('device disconnect', error);
+          initData();
         } else {
-          disconnectListener.current && disconnectListener.current.remove();
-          console.log(
-            'onDeviceDisconnected',
-            'device disconnect',
-            device!.id,
-            device!.name,
-          );
+          disconnectListener.current?.remove();
+          console.log('device disconnect', device!.id, device!.name);
         }
       },
     );
@@ -201,31 +201,37 @@ const App: React.FC = () => {
 
   /** 断开蓝牙连接 */
   function disconnect() {
-    BluetoothManager.disconnect()
-      .then(res => {
-        setData([...deviceMap.current.values()]);
-        setIsConnected(false);
-      })
-      .catch(err => {
-        setData([...deviceMap.current.values()]);
-        setIsConnected(false);
-      });
+    bleModule.disconnect();
+    initData();
   }
 
-  function renderItem(item: any) {
-    let data = item.item;
+  function initData() {
+    // 断开连接后清空UUID
+    bleModule.initUUID();
+    // 断开后显示上次的扫描结果
+    setData([...deviceMap.current.values()]);
+    setIsConnected(false);
+    setWriteData('');
+    setReadData('');
+    setReceiveData('');
+    setInputText('');
+  }
+
+  function renderItem(item: ListRenderItemInfo<Device>) {
+    const data = item.item;
+    const disabled = !!connectingId && connectingId !== data.id;
     return (
       <TouchableOpacity
         activeOpacity={0.7}
-        disabled={isConnected ? true : false}
+        disabled={disabled || isConnected}
         onPress={() => {
-          connect(item);
+          connect(data);
         }}
-        style={styles.item}>
+        style={[styles.item, {opacity: disabled ? 0.5 : 1}]}>
         <View style={{flexDirection: 'row'}}>
           <Text style={{color: 'black'}}>{data.name ? data.name : ''}</Text>
-          <Text style={{color: 'red', marginLeft: 50}}>
-            {data.isConnecting ? '连接中...' : ''}
+          <Text style={{marginLeft: 50, color: 'red'}}>
+            {connectingId === data.id ? '连接中...' : ''}
           </Text>
         </View>
         <Text>{data.id}</Text>
@@ -233,159 +239,72 @@ const App: React.FC = () => {
     );
   }
 
-  function renderHeader() {
-    return (
-      <View style={{marginTop: 20}}>
-        <TouchableOpacity
-          activeOpacity={0.7}
-          style={[
-            styles.buttonView,
-            {marginHorizontal: 10, height: 40, alignItems: 'center'},
-          ]}
-          onPress={isConnected ? disconnect : scan}>
-          <Text style={styles.buttonText}>
-            {scaning ? '正在搜索中' : isConnected ? '断开蓝牙' : '搜索蓝牙'}
-          </Text>
-        </TouchableOpacity>
-
-        <Text style={{marginLeft: 10, marginTop: 10}}>
-          {isConnected ? '当前连接的设备' : '可用设备'}
-        </Text>
-      </View>
-    );
-  }
-
   function renderFooter() {
-    return (
-      <View style={{marginBottom: 30}}>
-        {isConnected ? (
-          <View>
-            {renderWriteView(
-              '写数据(write)：',
-              '发送',
-              BluetoothManager.writeWithResponseCharacteristicUUID,
-              write,
-            )}
-            {renderWriteView(
-              '写数据(writeWithoutResponse)：',
-              '发送',
-              BluetoothManager.writeWithoutResponseCharacteristicUUID,
-              writeWithoutResponse,
-            )}
-            {renderReceiveView(
-              '读取的数据：',
-              '读取',
-              BluetoothManager.readCharacteristicUUID,
-              read,
-              readData,
-            )}
-            {renderReceiveView(
-              `监听接收的数据：${isMonitoring ? '监听已开启' : '监听未开启'}`,
-              '开启监听',
-              BluetoothManager.nofityCharacteristicUUID,
-              monitor,
-              receiveData,
-            )}
-          </View>
-        ) : (
-          <View style={{marginBottom: 20}}></View>
-        )}
-      </View>
-    );
-  }
-
-  function renderWriteView(
-    label: string,
-    buttonText: string,
-    characteristics: any[],
-    onPress: (index: number) => void,
-  ) {
-    if (characteristics.length == 0) {
-      return null;
+    if (!isConnected) {
+      return;
     }
     return (
-      <View style={{marginHorizontal: 10, marginTop: 30}}>
-        <Text style={{color: 'black'}}>{label}</Text>
-        <Text style={styles.content}>{writeData}</Text>
-        {characteristics.map((item, index) => {
-          return (
-            <TouchableOpacity
-              key={index}
-              activeOpacity={0.7}
-              style={styles.buttonView}
-              onPress={() => {
-                onPress(index);
-              }}>
-              <Text style={styles.buttonText}>
-                {buttonText} ({item})
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-        <TextInput
-          style={[styles.textInput]}
-          value={text}
-          placeholder="请输入消息"
-          onChangeText={text => {
-            setText(text);
-          }}
+      <ScrollView
+        style={{
+          marginTop: 10,
+          borderColor: '#eee',
+          borderStyle: 'solid',
+          borderTopWidth: StyleSheet.hairlineWidth * 2,
+        }}>
+        <Characteristic
+          label="写数据（write）："
+          action="发送"
+          content={writeData}
+          characteristics={bleModule.writeWithResponseCharacteristicUUID}
+          onPress={write('write')}
+          input={{inputText, setInputText}}
         />
-      </View>
-    );
-  }
 
-  function renderReceiveView(
-    label: string,
-    buttonText: string,
-    characteristics: any[],
-    onPress: (index: number) => void,
-    state: any,
-  ) {
-    if (characteristics.length == 0) {
-      return null;
-    }
-    return (
-      <View style={{marginHorizontal: 10, marginTop: 30}}>
-        <Text style={{color: 'black', marginTop: 5}}>{label}</Text>
-        <Text style={styles.content}>{state}</Text>
-        {characteristics.map((item, index) => {
-          return (
-            <TouchableOpacity
-              activeOpacity={0.7}
-              style={styles.buttonView}
-              onPress={() => {
-                onPress(index);
-              }}
-              key={index}>
-              <Text style={styles.buttonText}>
-                {buttonText} ({item})
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+        <Characteristic
+          label="写数据（writeWithoutResponse）："
+          action="发送"
+          content={writeData}
+          characteristics={bleModule.writeWithoutResponseCharacteristicUUID}
+          onPress={write('writeWithoutResponse')}
+          input={{inputText, setInputText}}
+        />
+
+        <Characteristic
+          label="读取的数据："
+          action="读取"
+          content={readData}
+          characteristics={bleModule.readCharacteristicUUID}
+          onPress={read}
+        />
+
+        <Characteristic
+          label={`通知监听接收的数据（${
+            isMonitoring ? '监听已开启' : '监听未开启'
+          }）：`}
+          action="开启监听"
+          content={receiveData}
+          characteristics={bleModule.nofityCharacteristicUUID}
+          onPress={monitor}
+        />
+      </ScrollView>
     );
   }
 
   return (
     <SafeAreaView style={styles.container}>
+      <Header
+        isConnected={isConnected}
+        scaning={scaning}
+        disabled={scaning || !!connectingId}
+        onPress={isConnected ? disconnect : scan}
+      />
       <FlatList
         renderItem={renderItem}
         keyExtractor={item => item.id}
         data={data}
-        ListHeaderComponent={renderHeader}
-        ListFooterComponent={renderFooter}
-        extraData={[
-          isConnected,
-          text,
-          receiveData,
-          readData,
-          writeData,
-          isMonitoring,
-          scaning,
-        ]}
-        keyboardShouldPersistTaps="handled"
+        extraData={connectingId}
       />
+      {renderFooter()}
     </SafeAreaView>
   );
 };
@@ -401,31 +320,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     paddingLeft: 10,
     paddingVertical: 8,
-  },
-  buttonView: {
-    height: 30,
-    backgroundColor: 'rgb(33, 150, 243)',
-    paddingHorizontal: 10,
-    borderRadius: 5,
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-    marginTop: 10,
-  },
-  buttonText: {
-    color: 'white',
-    fontSize: 12,
-  },
-  content: {
-    marginTop: 5,
-    marginBottom: 15,
-  },
-  textInput: {
-    paddingLeft: 5,
-    paddingRight: 5,
-    backgroundColor: 'white',
-    height: 50,
-    fontSize: 16,
-    flex: 1,
   },
 });
 

@@ -1,11 +1,8 @@
-import {Alert} from 'react-native';
-import {BleManager} from 'react-native-ble-plx';
+import {BleManager, Characteristic, Device} from 'react-native-ble-plx';
 import {Buffer} from 'buffer';
-import {byteToString} from './utils';
+import {alert, byteToString} from './utils';
 
 export default class BleModule {
-  /** 蓝牙是否连接 */
-  isConnecting: boolean;
   peripheralId!: string;
   manager: BleManager;
 
@@ -19,13 +16,12 @@ export default class BleModule {
   nofityCharacteristicUUID!: any[];
 
   constructor() {
-    this.isConnecting = false;
     this.manager = new BleManager();
     this.initUUID();
   }
 
   /** 获取蓝牙UUID */
-  async fetchServicesAndCharacteristicsForDevice(device: any) {
+  async fetchServicesAndCharacteristicsForDevice(device: Device) {
     var servicesMap = {} as Record<string, any>;
     var services = await device.services();
 
@@ -125,39 +121,19 @@ export default class BleModule {
     console.log('nofityCharacteristicUUID', this.nofityCharacteristicUUID);
   }
 
-  /** 搜索蓝牙 */
-  scan() {
-    return new Promise((resolve, reject) => {
-      this.manager.startDeviceScan(null, null, (error, device) => {
-        if (error) {
-          console.log('startDeviceScan error:', error);
-          if (error.errorCode == 102) {
-            this.alert('请打开手机蓝牙后再搜索');
-          }
-          reject(error);
-        } else {
-          resolve(device);
-        }
-      });
-    });
-  }
-
   /** 停止搜索蓝牙 */
   stopScan() {
     this.manager.stopDeviceScan();
   }
 
   /** 连接蓝牙 */
-  connect(id: string) {
-    console.log('isConneting:', id);
-    this.isConnecting = true;
+  connect(id: string): Promise<void> {
     return new Promise((resolve, reject) => {
       this.manager
         .connectToDevice(id)
         .then(device => {
           console.log('connect success:', device.name, device.id);
           this.peripheralId = device.id;
-          // resolve(device);
           return device.discoverAllServicesAndCharacteristics();
         })
         .then(device => {
@@ -165,38 +141,30 @@ export default class BleModule {
         })
         .then(services => {
           console.log('fetchServicesAndCharacteristicsForDevice', services);
-          this.isConnecting = false;
           this.getUUID(services);
-          resolve(null);
+          resolve();
         })
         .catch(err => {
-          this.isConnecting = false;
           console.log('connect fail: ', err);
           reject(err);
         });
     });
   }
 
-  /**
-   * 断开蓝牙
-   * */
+  /** 断开蓝牙 */
   disconnect() {
-    return new Promise((resolve, reject) => {
-      this.manager
-        .cancelDeviceConnection(this.peripheralId)
-        .then(res => {
-          console.log('disconnect success', res);
-          resolve(res);
-        })
-        .catch(err => {
-          reject(err);
-          console.log('disconnect fail', err);
-        });
-    });
+    this.manager
+      .cancelDeviceConnection(this.peripheralId)
+      .then(res => {
+        console.log('disconnect success', res);
+      })
+      .catch(err => {
+        console.log('disconnect fail', err);
+      });
   }
 
   /** 读取数据 */
-  read(index: number) {
+  read(index: number): Promise<string> {
     return new Promise((resolve, reject) => {
       this.manager
         .readCharacteristicForDevice(
@@ -214,7 +182,7 @@ export default class BleModule {
           },
           error => {
             console.log('read fail: ', error);
-            this.alert('read fail: ' + error.reason);
+            alert('read fail: ' + error.reason);
             reject(error);
           },
         );
@@ -222,7 +190,7 @@ export default class BleModule {
   }
 
   /** 写数据 */
-  write(value: string, index: number) {
+  write(value: string, index: number): Promise<Characteristic> {
     let formatValue: any;
     if (value === '0D0A') {
       //直接发送小票打印机的结束标志
@@ -231,7 +199,6 @@ export default class BleModule {
       //发送内容，转换成base64编码
       formatValue = new Buffer(value, 'base64').toString('ascii');
     }
-    let transactionId = 'write';
     return new Promise((resolve, reject) => {
       this.manager
         .writeCharacteristicWithResponseForDevice(
@@ -239,7 +206,6 @@ export default class BleModule {
           this.writeWithResponseServiceUUID[index],
           this.writeWithResponseCharacteristicUUID[index],
           formatValue,
-          transactionId,
         )
         .then(
           characteristic => {
@@ -248,7 +214,7 @@ export default class BleModule {
           },
           error => {
             console.log('write fail: ', error);
-            this.alert('write fail');
+            alert('write fail');
             reject(error);
           },
         );
@@ -256,7 +222,7 @@ export default class BleModule {
   }
 
   /** 写数据 withoutResponse */
-  writeWithoutResponse(value: string, index: number) {
+  writeWithoutResponse(value: string, index: number): Promise<Characteristic> {
     let formatValue: any;
     if (value === '0D0A') {
       //直接发送小票打印机的结束标志
@@ -265,7 +231,6 @@ export default class BleModule {
       //发送内容，转换成base64编码
       formatValue = new Buffer(value, 'base64').toString('ascii');
     }
-    let transactionId = 'writeWithoutResponse';
     return new Promise((resolve, reject) => {
       this.manager
         .writeCharacteristicWithoutResponseForDevice(
@@ -273,7 +238,6 @@ export default class BleModule {
           this.writeWithoutResponseServiceUUID[index],
           this.writeWithoutResponseCharacteristicUUID[index],
           formatValue,
-          transactionId,
         )
         .then(
           characteristic => {
@@ -282,7 +246,7 @@ export default class BleModule {
           },
           error => {
             console.log('writeWithoutResponse fail: ', error);
-            this.alert('writeWithoutResponse fail');
+            alert('writeWithoutResponse fail');
             reject(error);
           },
         );
@@ -291,10 +255,7 @@ export default class BleModule {
 
   /** 卸载蓝牙管理器 */
   destroy() {
+    console.log('destroy');
     this.manager.destroy();
-  }
-
-  alert(text: string) {
-    Alert.alert('提示', text, [{text: '确定', onPress: () => {}}]);
   }
 }
