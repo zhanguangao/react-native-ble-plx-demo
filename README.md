@@ -8,6 +8,6 @@ BLE 蓝牙通信原理可参考我的博客[React Native BLE 蓝牙通信](http:
 
 # demo 截图（ios）
 
-![搜索](https://github.com/zhanguangao/react-native-ble-plx-demo/blob/next/src/assets/scan.jpg?raw=true)
+![搜索](https://github.com/zhanguangao/react-native-ble-plx-demo/blob/master/src/assets/scan.jpg?raw=true)
 <br>
-![已连接](https://github.com/zhanguangao/react-native-ble-plx-demo/blob/next/src/assets/connect.jpg?raw=true)
+![已连接](https://github.com/zhanguangao/react-native-ble-plx-demo/blob/master/src/assets/connect.jpg?raw=true)
